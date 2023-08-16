@@ -8,6 +8,10 @@
 
 #include <libnetfilter_queue/libnetfilter_queue.h>
 
+#include <string.h>
+
+char* filterURL = "";
+
 void dump(unsigned char* buf, int size) {
 	int i;
 	for (i = 0; i < size; i++) {
@@ -142,19 +146,17 @@ static u_int32_t get_payload (struct nfq_data *tb) {
 		tcp[i] = data[i+20];
 	}
 	dump(tcp, 20);
+
 	unsigned char tcpOffset = ((tcp[12] >> 4) * 4) - 20;
 
-	unsigned char* http;
-	http = (unsigned char*)malloc(sizeof(char) * (ret-20-20-tcpOffset));
-
-	for (int i = 0; i < ret; i++) {
+	unsigned char http[ret-20-20-tcpOffset];
+	for (int i = 0; i < ret-20-20-tcpOffset; i++) {
 		http[i] = data[i+20+20+tcpOffset];
 	}
-	printf("123\n");
-	dump(http, ret-20-20-tcpOffset);
 
-
-	free(http);
+	if (strstr(http, filterURL) != NULL) {
+		return 0;
+	}
 
 	fputc('\n', stdout);
 
@@ -164,6 +166,8 @@ static u_int32_t get_payload (struct nfq_data *tb) {
 static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg, struct nfq_data *nfa, void *data) {
 	u_int32_t id = get_payload(nfa);
 
+	if (!id)
+		return nfq_set_verdict(qh, id, NF_DROP, 0, NULL);
 
 	printf("entering callback\n");
 	return nfq_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
@@ -180,7 +184,7 @@ int main(int argc, char **argv) {
 		return -1;
 	}
 
-	char* filterURL = argv[1];
+	filterURL = argv[1];
 	
 	struct nfq_handle *h;
 	struct nfq_q_handle *qh;
